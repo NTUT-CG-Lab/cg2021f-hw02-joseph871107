@@ -71,9 +71,12 @@
 			so.installDownloadBtn();
 
 			//產生 "開啟自評表按鈕"
+			let wrapper = document.body.appendChild(document.createElement('div'));
+			wrapper.style.position = 'absolute';
+			wrapper.style.top = '0';
 			so.renderBtn(
 				//自評表按鈕插入位置
-				document.body,
+				wrapper,
 				//自評表按鈕文字
 				"開啟自評表"
 			);
@@ -87,11 +90,14 @@
 		import { OutlineEffect } from './jsm/effects/OutlineEffect.js';
 		import { MMDLoader } from './jsm/loaders/MMDLoader.js';
 		import { MMDAnimationHelper } from './jsm/animation/MMDAnimationHelper.js';
+		let meshes = [];
 
 		let camera, scene, renderer, effect;
 		let mesh, helper;
 
 		const vpds = [];
+
+		let zoomState = false;
 
 		Ammo().then(function (AmmoLib) {
 
@@ -101,6 +107,269 @@
 			animate();
 
 		});
+
+		let cameracontrols;
+		let raycaster = new THREE.Raycaster();
+		let mouse = new THREE.Vector2();
+		let eyes;
+		let eyesLabels = new Array(4);
+
+		class CustomOBJ{
+			constructor(scene, object3D, name){
+				this.scene = scene;
+				this.object3D = object3D;
+			}
+
+			hide(){
+				this.scene.remove(this.object3D);
+			}
+
+			show(){
+				this.scene.add(this.object3D);
+			}
+
+			resetPosition(){
+				this.object3D.position.x = 0;
+				this.object3D.position.y = 0;
+				this.object3D.position.z = 0;
+			}
+		}
+
+		function updateEyes(){
+			var findBone = function(obj, name){
+				if ('name' in obj && obj.name == name){
+					return obj;
+				}
+				else{
+					if ('children' in obj){
+						var found = [];
+						for(var child of obj.children){
+							var result = findBone(child, name);
+							if (result != null)
+								found.push(result);
+						}
+						if (found.length == 0){
+							return null;
+						}else{
+							return found[0];
+						}
+						return ;
+					}else{
+						return null;
+					}
+				}
+			}
+			var objs = [
+				findBone(mesh.object3D, "左目"),
+				findBone(mesh.object3D, "右目"),
+			];
+			eyes = objs;
+		}
+
+		function zoom2Eye(index){
+			var getWorldPosition = function(obj3D){
+				var target = new THREE.Vector3();
+				return obj3D.getWorldPosition( target );
+			}
+			updateEyes();
+
+			scale = 1000;
+			if (index >= eyes.length)
+				index = eyes.length - 1;
+			if (index < 0)
+				index = 0;
+			var offset = getWorldPosition(eyes[index].children[0]);
+			onWindowResize(offset);
+		}
+		function zoom(index){
+			cameracontrols.reset();
+			zoomState = !zoomState;
+			if (zoomState){
+				zoom2Eye(index);
+			}
+			else{
+				scale = 30;
+				onWindowResize();
+			}
+		}
+
+		let i = 3;
+		function changeModel(index){
+			mesh.hide();
+			mesh = meshes[index];
+			mesh.show();
+
+			zoomState = true;
+			zoom();
+		}
+		function changeWithIncrement(increment){
+			for(let eyesLabel of eyesLabels){
+				if (eyesLabel)
+					eyesLabel.dispose();
+			}
+			eyesLabels = new Array(4);
+
+			i = (i+increment) % meshes.length;
+			if(i==-1)
+				i = meshes.length-1;
+
+			changeModel(i);
+		}
+
+		function getMousePositionFromCamera(mouse){
+			var plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+			var mv = new THREE.Vector3(
+				mouse.x,
+				mouse.y,
+				0.5 );
+			raycaster.setFromCamera(mv, camera);
+			var intersects = new THREE.Vector3();
+			var pos = raycaster.ray.intersectPlane(plane, intersects);
+
+			return new THREE.Vector3(intersects.x, intersects.y, intersects.z);
+		}
+
+		function createLine(start, end, color){
+			const material = new THREE.LineBasicMaterial( { color: color } );
+
+			const points = [];
+			points.push(start);
+			points.push(end);
+
+			const geometry = new THREE.BufferGeometry().setFromPoints( points );
+			const line = new THREE.Line( geometry, material );
+			return material, geometry, line;
+		}
+
+		class EyeLabel extends CustomOBJ{
+			constructor(scene, start, end, color=0xff0000){
+				var material, geometry, line = createLine(start, end, color);
+				super(scene, line);
+
+				this.geometry = geometry;
+				this.material = material;
+				this.mesh = mesh;
+
+				this.start = start;
+				this.end = end;
+				this.color = color;
+			}
+
+			dispose(){
+				this.hide();
+			}
+		}
+		class EyesLabel{
+			constructor(scene, mouse, start, end, color1=0xff0000, color2=0x0000ff, horizontal=true){
+				this.scene = scene;
+				var start2 = start.clone(), end2 = end.clone();
+				if (horizontal){
+					end2.x = -end2.x;
+				}else{
+					start2.x = -start2.x;
+					end2.x = -end2.x;
+				}
+				this.leftEye = new EyeLabel(scene, start, end, color1);
+				this.rightEye = new EyeLabel(scene, start2, end2, color2);
+				
+				this.mouse = mouse;
+			}
+
+			dispose(){
+				this.leftEye.dispose();
+				this.rightEye.dispose();
+			}
+
+			show(){
+				this.leftEye.show();
+			}
+
+			showRight(){
+				this.rightEye.show();
+			}
+
+			hide(){
+				this.leftEye.hide();
+				this.rightEye.hide();
+			}
+
+			toJSON(){
+				return this.mouse;
+			}
+		}
+		function labelEye(index){
+			updateEyes();
+
+			var newMouse = getMousePositionFromCamera(mouse);
+			var center = new THREE.Vector3();
+			var start, end, color1, color2;
+			const z = 24;
+			switch(index){
+				case 0:
+				case 2:
+					start = new THREE.Vector3(center.x, newMouse.y, z);
+					end = new THREE.Vector3(center.x + 1000, newMouse.y, z);
+					color1 = 0xff0000;
+					color2 = 0xff00ff;
+					break
+				case 1:
+				case 3:
+					start = new THREE.Vector3(newMouse.x, -1000, z);
+					end = new THREE.Vector3(newMouse.x, 1000, z);
+					color1 = 0x00ff00;
+					color2 = 0x00ffff;
+					break
+			}
+			if (!eyesLabels[index]){
+				eyesLabels[index] = new EyesLabel(scene, newMouse, start, end, color1, color2, (index ==0 || index == 2));
+				eyesLabels[index].show();
+			}else{
+				eyesLabels[index].dispose();
+				delete eyesLabels[index];
+			}
+		}
+
+		function download(content, fileName, contentType) {
+			var a = document.createElement("a");
+			var file = new Blob([content], {type: contentType});
+			a.href = URL.createObjectURL(file);
+			a.download = fileName;
+			a.click();
+		}
+		
+
+		window.addEventListener('keydown', function(e){
+			switch(e.key){
+				case 'a':
+					changeWithIncrement(-1);
+					break
+				case 'd':
+					changeWithIncrement(1);
+					break
+				case 'q':
+					let count = 0;
+					for(let i = 0;i <eyesLabels.length; i++)
+						if (eyesLabels[i])
+							count++;
+					if (count == 4)
+						for(let eyesLabel of eyesLabels)
+							eyesLabel.showRight();
+					break
+				case 'e':
+					zoom(0);
+					break
+				case '1':
+				case '2':
+				case '3':
+				case '4':
+					labelEye(parseInt(e.key)-1)
+					break
+				case 's':
+					download(JSON.stringify(eyesLabels), 'model_data.json', 'text/plain');
+					break;
+			}
+			
+		}, false);
 
 		function init() {
 
@@ -164,48 +433,58 @@
 
 			const loader = new MMDLoader();
 
-			loader.load(modelFile, function (object) {
+			var process = function (object, flag) {
+				var currentMesh = new CustomOBJ(scene, object);
+				currentMesh.object3D.position.y = - 10;
+				meshes.push(currentMesh);
 
-				mesh = object;
-				mesh.position.y = - 10;
+				if (flag){
+					mesh = currentMesh;
+					mesh.show();
+					let vpdIndex = 0;
 
-				scene.add(mesh);
+					function loadVpd() {
 
-				let vpdIndex = 0;
+						const vpdFile = vpdFiles[vpdIndex];
 
-				function loadVpd() {
+						loader.loadVPD(vpdFile, false, function (vpd) {
 
-					const vpdFile = vpdFiles[vpdIndex];
+							vpds.push(vpd);
 
-					loader.loadVPD(vpdFile, false, function (vpd) {
+							vpdIndex++;
 
-						vpds.push(vpd);
+							if (vpdIndex < vpdFiles.length) {
 
-						vpdIndex++;
+								loadVpd();
 
-						if (vpdIndex < vpdFiles.length) {
+							} else {
 
-							loadVpd();
+								initGui();
 
-						} else {
+							}
 
-							initGui();
-
-						}
-
-					}, onProgress, null);
-
+						}, onProgress, null);
+					}
+					loadVpd();
 				}
+			}
+			let modelFiles = [
+				'models/mmd/kizunaai/kizunaai.pmx',
+				'models/mmd/『天宮こころ(Kokoro Amamiya)』/『天宮こころ(Kokoro Amamiya)』.pmx',
+				'models/mmd/るいのれ式物述有栖_配布用フォルダ/物述有栖.pmx'
+			];
+			for (let i=0;i<modelFiles.length;i++){
+				let modelFile = modelFiles[i];
+				loader.load(modelFile, (obj) => process(obj, i==0), onProgress, null);
+			}
 
-				loadVpd();
-
-			}, onProgress, null);
 
 			//
 
 			window.addEventListener('resize', onWindowResize);
+			document.addEventListener('mousemove', onDocumentMouseMove, false);
 			//鏡頭控制
-			const cameracontrols = new OrbitControls(camera, renderer.domElement);
+			cameracontrols = new OrbitControls(camera, renderer.domElement);
 			cameracontrols.minDistance = 10;
 			cameracontrols.maxDistance = 100;
 			cameracontrols.enableRotate = false;
@@ -213,7 +492,7 @@
 
 				const gui = new GUI();
 
-				const dictionary = mesh.morphTargetDictionary;
+				const dictionary = mesh.object3D.morphTargetDictionary;
 
 				const controls = {};
 				const keys = [];
@@ -285,7 +564,7 @@
 
 						const key = keys[i];
 						const value = controls[key];
-						mesh.morphTargetInfluences[i] = value;
+						mesh.object3D.morphTargetInfluences[i] = value;
 
 					}
 
@@ -297,11 +576,11 @@
 
 					if (index === - 1) {
 
-						mesh.pose();
+						mesh.object3D.pose();
 
 					} else {
 
-						helper.pose(mesh, vpds[index]);
+						helper.pose(mesh.object3D, vpds[index]);
 
 					}
 
@@ -322,15 +601,24 @@
 
 		}
 
-		function onWindowResize() {
-
-			let scale = 30;
-			camera.left = window.innerWidth / scale / - 2;
-			camera.right = window.innerWidth / scale / 2;
-			camera.top = window.innerHeight / scale / 2;
-			camera.bottom = window.innerHeight / scale / - 2;
+		let scale = 30;
+		function resizeCamera(offset){
+			camera.left = window.innerWidth / scale / - 2 + offset.x;
+			camera.right = window.innerWidth / scale / 2 + offset.x;
+			camera.top = window.innerHeight / scale / 2 + offset.y;
+			camera.bottom = window.innerHeight / scale / - 2 + offset.y;
 			camera.updateProjectionMatrix();
+		}
 
+		function onDocumentMouseMove(event) {
+			event.preventDefault();
+			mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+			// mouse.y = -(event.clientY / window.innerHeight) * 2 + 1.08;
+			mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+		}
+
+		function onWindowResize(offset = new THREE.Vector3(0, 0, 0)) {
+			resizeCamera(offset);
 			effect.setSize(window.innerWidth, window.innerHeight);
 
 		}
