@@ -199,23 +199,31 @@
 				return index * 3 + orientation_encode;
 			}
 
-			set X(x){
+			X(x, index=null){
 				this.start.x = x;
 				this.end.x = x;
 
 				const positions = this.object3D.geometry.attributes.position.array;
-				positions[this.getArrayIndexByOrientation(0, 'x')] = x;
-				positions[this.getArrayIndexByOrientation(1, 'x')] = x;
+				if (index){
+					positions[this.getArrayIndexByOrientation(index, 'x')] = x;
+				}else{
+					positions[this.getArrayIndexByOrientation(0, 'x')] = x;
+					positions[this.getArrayIndexByOrientation(1, 'x')] = x;
+				}
 				this.updateGeometry();
 			}
 
-			set Y(y){
+			Y(y, index=null){
 				this.start.y = y;
 				this.end.y = y;
 
 				const positions = this.object3D.geometry.attributes.position.array;
-				positions[this.getArrayIndexByOrientation(0, 'y')] = y;
-				positions[this.getArrayIndexByOrientation(1, 'y')] = y;
+				if (index){
+					positions[this.getArrayIndexByOrientation(index, 'y')] = y;
+				}else{
+					positions[this.getArrayIndexByOrientation(0, 'y')] = y;
+					positions[this.getArrayIndexByOrientation(1, 'y')] = y;
+				}
 				this.updateGeometry();
 			}
 		};
@@ -259,14 +267,33 @@
 				this.rightEye.hide();
 			}
 
+			updateBorder(camera){
+				var cameraPosition = new THREE.Vector3();
+
+				var left = (camera.left) / camera.zoom + cameraPosition.x;
+				var right = (camera.right) / camera.zoom + cameraPosition.x;
+				var top = (camera.top) / camera.zoom + cameraPosition.y;
+				var bottom = (camera.bottom) / camera.zoom + cameraPosition.y;
+
+				if (this.horizontal){
+					this.leftEye.X(right, 1);
+					this.rightEye.X(left, 1);
+				}else{
+					this.leftEye.Y(top, 0);
+					this.leftEye.Y(bottom, 1);
+					this.rightEye.Y(top, 0);
+					this.rightEye.Y(bottom, 1);
+				}
+			}
+
 			set X(x){
-				this.leftEye.X = x;
-				this.rightEye.X = -x;
+				this.leftEye.X(x);
+				this.rightEye.X(-x);
 			}
 
 			set Y(y){
-				this.leftEye.Y = y;
-				this.rightEye.Y = y;
+				this.leftEye.Y(y);
+				this.rightEye.Y(y);
 			}
 		};
 
@@ -330,18 +357,20 @@
 						var center = new THREE.Vector3();
 						var start, end, color1, color2;
 						const z = 24;
+						const max = Number.MAX_SAFE_INTEGER;
+						const min = -9999999999999999;
 						switch(this.index){
 							case 0:
 							case 2:
 								start = new THREE.Vector3(center.x, mouse.y, z);
-								end = new THREE.Vector3(center.x + 1000, mouse.y, z);
+								end = new THREE.Vector3(max, mouse.y, z);
 								color1 = 0xff0000;
 								color2 = 0xff00ff;
 								break
 							case 1:
 							case 3:
-								start = new THREE.Vector3(mouse.x, -1000, z);
-								end = new THREE.Vector3(mouse.x, 1000, z);
+								start = new THREE.Vector3(mouse.x, min, z);
+								end = new THREE.Vector3(mouse.x, max, z);
 								color1 = 0x00ff00;
 								color2 = 0x00ffff;
 								break
@@ -441,6 +470,13 @@
 				}
 			}
 
+			updateBorder(camera){
+				for(let eyesLabel of this.eyesLabels){
+					if (eyesLabel)
+						eyesLabel.updateBorder(camera);
+				}
+			}
+
 			toJSON(){
 				var obj = { 'left_eye': [], 'right_eye': [] };
 				for(let eyesLabel of this.eyesLabels){
@@ -537,7 +573,8 @@
 					changeWithIncrement(1);
 					break
 				case 'q':
-					eyeLabelSystem.showRight();
+					if (eyeLabelSystem)
+						eyeLabelSystem.showRight();
 					break
 				case 'e':
 					zoom(0);
@@ -548,10 +585,12 @@
 				case '4':
 					var index = parseInt(e.key)-1;
 					updateEyes();
-					eyeLabelSystem.keyDown(index);
+					if (eyeLabelSystem)
+						eyeLabelSystem.keyDown(index);
 					break
 				case 's':
-					updateModelList(eyeLabelSystem);
+				if (eyeLabelSystem)
+						updateModelList(eyeLabelSystem);
 					download(JSON.stringify(model_list, null, 4), 'model_data.json', 'text/plain');
 					break;
 			}
@@ -823,17 +862,18 @@
 		function onDocumentMouseMove(event) {
 			event.preventDefault();
 			mouseRaycaster.update(event);
-			eyeLabelSystem.update(mouseRaycaster.position);
+			if (eyeLabelSystem)
+				eyeLabelSystem.update(mouseRaycaster.position);
 		}
 
 		function onDocumentMouseDown(event) {
-			eyeLabelSystem.mouseDown();
+			if (eyeLabelSystem)
+				eyeLabelSystem.mouseDown();
 		}
 
 		function onWindowResize(offset = new THREE.Vector3(0, 0, 0)) {
 			resizeCamera(offset);
 			effect.setSize(window.innerWidth, window.innerHeight);
-
 		}
 
 		//
@@ -848,6 +888,8 @@
 		function render() {
 
 			effect.render(scene, camera);
+			// if (eyeLabelSystem)
+			// 	eyeLabelSystem.updateBorder(camera);
 
 		}
 	</script>
