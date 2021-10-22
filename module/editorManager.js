@@ -1,6 +1,7 @@
 import * as THREE from '../build/three.module.js';
 import { MouseRaycaster } from './mouseRaycaster.js';
 import { ModelVpdLoader } from './modelVpdLoader.js';
+import { ModelVpdGui } from './modelVpdGui.js';
 import { PmxEditor } from './pmxEditor.js';
 
 export class EditorManager{
@@ -17,8 +18,22 @@ export class EditorManager{
 		this.scale = 30;
 		this.zoomState = false;
         this.mouseRaycaster = new MouseRaycaster(scene, camera, renderer.domElement);
-		this.modelList;
+        this.modelList = EditorManager.readJson('model_list.json');
         this.currentModelIndex = 3;
+
+        const modelIndexGui = gui.addFolder('Model');
+        const controls = { index: 0 };
+        const files = { };
+
+        for (let i = 0; i < this.modelList.modellist.length; i++) {
+            var basename = ModelVpdGui.getBaseName(this.modelList.modellist[i].location);
+            controls[basename] = false;
+            files[basename] = i;
+        }
+        modelIndexGui.add(controls, 'index', files).onChange(() => this.onChangeModel(this));
+        modelIndexGui.open();
+        this.modelIndexGui = modelIndexGui;
+        this.controls = controls;
         
         const vpdFiles = [
             'models/mmd/vpds/01.vpd',
@@ -44,9 +59,11 @@ export class EditorManager{
             if (flag){
                 pmxEditor.show();
                 scope.editor = pmxEditor;
+
+                scope.controls.index = 0;
+                scope.modelIndexGui.updateDisplay();
             }
         }
-        this.modelList = EditorManager.readJson('model_list.json');
         for (let i=0;i<this.modelList.modellist.length;i++){
             let modelFile = this.modelList.modellist[i];
             var editor = new PmxEditor(
@@ -112,6 +129,13 @@ export class EditorManager{
         this.currentModelIndex = length-1;
 
         this.changeModel(this.currentModelIndex);
+        this.controls.index = this.currentModelIndex;
+        this.modelIndexGui.updateDisplay();
+    }
+
+    onChangeModel(scope) {
+        const index = parseInt(scope.controls.index);
+        this.changeModel(index);
     }
 
     updateModelList(){

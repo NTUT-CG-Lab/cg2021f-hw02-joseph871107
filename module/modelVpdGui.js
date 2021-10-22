@@ -11,6 +11,10 @@ export class ModelVpdGui{
         this.callback(this);
     }
 
+    static getBaseName(s) {
+        return s.slice(s.lastIndexOf('/') + 1);
+    }
+
     initGui() {
         const gui = this.gui;
 
@@ -25,10 +29,6 @@ export class ModelVpdGui{
 
         var scope = this;
 
-        function getBaseName(s) {
-            return s.slice(s.lastIndexOf('/') + 1);
-        }
-
         function initControls() {
             for (const key in dictionary) {
                 controls[key] = 0.0;
@@ -37,7 +37,7 @@ export class ModelVpdGui{
             controls.pose = - 1;
 
             for (let i = 0; i < scope.modelVpdLoader.vpdFiles.length; i++) {
-                controls[getBaseName(scope.modelVpdLoader.vpdFiles[i])] = false;
+                controls[ModelVpdGui.getBaseName(scope.modelVpdLoader.vpdFiles[i])] = false;
             }
         }
 
@@ -51,7 +51,7 @@ export class ModelVpdGui{
             const files = { default: - 1 };
 
             for (let i = 0; i < scope.modelVpdLoader.vpdFiles.length; i++) {
-                files[getBaseName(scope.modelVpdLoader.vpdFiles[i])] = i;
+                files[ModelVpdGui.getBaseName(scope.modelVpdLoader.vpdFiles[i])] = i;
             }
 
             poses.add(controls, 'pose', files).onChange(onChangePose);
