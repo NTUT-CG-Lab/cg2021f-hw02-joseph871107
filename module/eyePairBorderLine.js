@@ -62,10 +62,12 @@ export class EyePairBorderLine{
     set X(x){
         this.leftEye.X(x);
         this.rightEye.X(-x);
+        this.mouse.x = x;
     }
 
     set Y(y){
         this.leftEye.Y(y);
         this.rightEye.Y(y);
+        this.mouse.y = y;
     }
 };
