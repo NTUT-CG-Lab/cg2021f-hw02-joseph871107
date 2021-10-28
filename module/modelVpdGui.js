@@ -89,7 +89,7 @@ export class ModelVpdGui{
         onChangeMorph();
         onChangePose();
 
-        model.open();
+        // model.open();
         // poses.open();
         // morphs.open();
 

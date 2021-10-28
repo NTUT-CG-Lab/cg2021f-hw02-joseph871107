@@ -22,13 +22,13 @@ export class EditorManager{
         this.currentModelIndex = 3;
 
         const modelIndexGui = gui.addFolder('Model');
-        const controls = { index: 0 };
+        const controls = { index: -1 };
         const files = { };
 
         for (let i = 0; i < this.modelList.modellist.length; i++) {
             var basename = ModelVpdGui.getBaseName(this.modelList.modellist[i].location);
             controls[basename] = false;
-            files[basename] = i;
+            files[basename] = basename.split('.')[0];
         }
         modelIndexGui.add(controls, 'index', files).onChange(() => this.onChangeModel(this));
         modelIndexGui.open();
@@ -60,11 +60,11 @@ export class EditorManager{
                 pmxEditor.show();
                 scope.editor = pmxEditor;
 
-                scope.controls.index = 0;
+                scope.controls.index = pmxEditor.modelLoader.name;
                 scope.modelIndexGui.updateDisplay();
             }
         }
-        for (let i=0;i<this.modelList.modellist.length;i++){
+        for (let i = 0; i < this.modelList.modellist.length; i++){
             let modelFile = this.modelList.modellist[i];
             var editor = new PmxEditor(
                 scene,
@@ -129,12 +129,12 @@ export class EditorManager{
         this.currentModelIndex = length-1;
 
         this.changeModel(this.currentModelIndex);
-        this.controls.index = this.currentModelIndex;
+        this.controls.index = this.editor.modelLoader.name;
         this.modelIndexGui.updateDisplay();
     }
 
     onChangeModel(scope) {
-        const index = parseInt(scope.controls.index);
+        const index = scope.editors.findIndex((editor) => editor.modelLoader.name == scope.controls.index);
         this.changeModel(index);
     }
 
@@ -180,7 +180,6 @@ export class EditorManager{
                 break
             case 's':
                 this.updateModelList();
-                console.log(this.modelList)
                 EditorManager.download(JSON.stringify(this.modelList, null, 4), 'model_data.json', 'text/plain');
                 break;
             case 'l':
@@ -194,7 +193,6 @@ export class EditorManager{
                     var fr=new FileReader();
                     fr.onload=function(){
                         scope.modelList = JSON.parse(fr.result);
-                        console.log(scope.modelList)
                         for(var thisEditor of scope.editors){
                             thisEditor.fromJSON(scope.modelList.modellist.find((a)=>a.location==thisEditor.modelPath), scope.scene, scope.camera, scope.mouseRaycaster, scope.gui, scope.vpdLoader);
                         }
